@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny,IsAdminUser
 from rest_framework.authtoken.models import Token
+from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import authenticate
 from .models import User,Tasks
 from .serializers import AuthSerializer,UserSerializer,TasksSerializer
@@ -41,18 +42,17 @@ class AuthAPIView(APIView):
         
 
 class TasksAPIView(APIView):
+    pagination_class=PageNumberPagination
     
-    def get(self,request,id=None):
+    def get(self,request):
         try:
-            if id:
-                queryset=Tasks.objects.filter(user=request.user,id=id).first()
-                serializer=TasksSerializer(queryset)
-            else:
-                queryset=Tasks.objects.filter(user=request.user)
-                serializer=TasksSerializer(queryset,many=True)
+            pagination=self.pagination_class()
+            queryset=Tasks.objects.filter(user=request.user)
+            pagination_queryset=pagination.paginate_queryset(queryset=queryset,request=request)
+            serializer=TasksSerializer(pagination_queryset,many=True)
 
 
-            return Response(serializer.data,status=status.HTTP_200_OK)
+            return pagination.get_paginated_response(serializer.data)
 
         
         except Exception as e:
@@ -124,6 +124,20 @@ class UserListAPIView(APIView):
             queryset=User.objects.all()
             serializer=UserSerializer(queryset,many=True)
             return Response(serializer.data,status=status.HTTP_200_OK)
+        except Exception as e:
+            print(e)
+            context={
+                "detail":"Something went wrong please try again"
+            }
+            return Response(context,status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class LogoutAPIView(APIView):
+    def delete(self,request):
+        try:
+            Token.objects.get(user=request.user).delete()
+            return Response({"message":"Logged out successfully"},status=status.HTTP_204_NO_CONTENT)
+
         except Exception as e:
             print(e)
             context={
